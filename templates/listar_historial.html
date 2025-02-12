@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2 class="text-center">Historial</h2>
+
+    {% if historial %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Accion</th>
+                    <th>Producto_ID</th>
+                    <th>Nombre</th>
+                    <th>Descripcion</th>
+                    <th>Cantidad</th>
+                    <th>Precio</th>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for hist in historial %}
+                    <tr>
+                        <td>{{ hist[0] }}</td>  <!-- ID -->
+                        <td>{{ hist[1] }}</td>  <!-- Accion -->
+                        <td>{{ hist[2] }}</td>  <!-- Producto_ID -->
+                        <td>{{ hist[3] }}</td>  <!-- Nombre -->
+                        <td>{{ hist[4] }}</td>  <!-- Descripcion -->
+                        <td>{{ hist[5] }}</td>  <!-- Cantidad -->
+                        <td>{{ hist[6] }}</td>  <!-- Precio -->
+                        <td>{{ hist[7] }}</td>  <!-- Fecha -->
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No hay historial registrados.</p>
+    {% endif %}
+{% endblock %}

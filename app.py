@@ -59,13 +59,6 @@ def confirmar_eliminar(id_producto):
     return render_template('confirmar_eliminar.html', producto=producto)
 
 
-
-@app.route('/eliminar', methods=['POST'])
-def eliminar():
-    id_producto = int(request.form['id_producto'])
-    eliminar_producto(id_producto)
-    return redirect(url_for('index'))
-
 @app.route('/historial')
 def historial():
     historial_movimientos = listar_historial()

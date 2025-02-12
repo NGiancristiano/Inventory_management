@@ -32,6 +32,8 @@ def create_tables():
                 historial_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 accion TEXT NOT NULL,
                 producto_id INTEGER NOT NULL,
+                nombre TEXT,
+                descripcion TEXT,
                 cantidad INTEGER,
                 precio REAL,
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -60,12 +62,11 @@ def agregar_producto(nombre, descripcion, cantidad, precio):
 
         # Registrar el movimiento en el historial
         cursor.execute("""
-                    INSERT INTO historial (accion, producto_id, cantidad, precio)
-                    VALUES ('Agregar', ?, ?, ?)
-                """, (producto_id, cantidad, precio))
+                    INSERT INTO historial (accion, producto_id, nombre, descripcion, cantidad, precio)
+                    VALUES ('Agregar', ?, ?, ?, ?, ?)
+                """, (producto_id, nombre, descripcion, cantidad, precio))
 
         conn.commit()
-        print(f"Producto '{nombre}' agregado correctamente.")
 
     except sqlite3.IntegrityError:
         print(f"Error: El producto '{nombre}' ya existe.")
@@ -115,19 +116,38 @@ def actualizar_producto(id_producto, nombre=None, descripcion=None, cantidad=Non
             if not producto:
                 raise ValueError(f"El producto con ID {id_producto} no existe.")
 
-            if nombre is not None:
+            cambio = False
+            nombre_nuevo = None
+            descripcion_nueva = None
+            cantidad_vieja = producto[3]
+            precio_viejo = producto[4]
+
+            if nombre is not None and nombre != producto[1]:
                 cursor.execute("UPDATE productos SET nombre = ? WHERE id = ?", (nombre, id_producto))
+                nombre_nuevo = nombre
+                cambio = True
 
-            if descripcion is not None:
+            if descripcion is not None and descripcion != producto[2]:
                 cursor.execute("UPDATE productos SET descripcion = ? WHERE id = ?", (descripcion, id_producto))
+                descripcion_nueva = descripcion
+                cambio = True
 
-            if cantidad is not None:
+            if cantidad is not None and cantidad != producto[3]:
                 cursor.execute("UPDATE productos SET cantidad = ? WHERE id = ?", (cantidad, id_producto))
+                cambio = True
 
-            if precio is not None:
+            if precio is not None and precio != producto[4]:
                 cursor.execute("UPDATE productos SET precio = ? WHERE id = ?", (precio, id_producto))
+                cambio = True
 
-            conn.commit()
+            # Si hubo cambios, registrarlos en el historial
+            if cambio:
+                cursor.execute("""
+                        INSERT INTO historial (accion, producto_id, nombre, descripcion, cantidad, precio) 
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """, ("Actualizar", id_producto, nombre_nuevo, descripcion_nueva,cantidad - cantidad_vieja, precio - precio_viejo))
+
+                conn.commit()
 
     except ValueError as e:
         print(f"Error: {e}")
@@ -150,24 +170,22 @@ def eliminar_producto(id_producto):
     conn, cursor = connect_db()
     try:
 
-        cursor.execute("SELECT nombre, cantidad FROM productos WHERE id = ?", (id_producto,))
+        cursor.execute("SELECT nombre, descripcion, cantidad, precio FROM productos WHERE id = ?", (id_producto,))
         producto = cursor.fetchone()
 
         if producto:
-            nombre, cantidad = producto
+
+            nombre, descripcion, cantidad, precio = producto
 
             cursor.execute("DELETE FROM productos WHERE id = ?", (id_producto,))
             conn.commit()
 
             # Registrar la eliminación en el historial
             cursor.execute("""
-                            INSERT INTO historial (accion, producto_id, cantidad)
-                            VALUES ('Eliminar', ?, ?)
-                        """, (id_producto, cantidad))
-
+                            INSERT INTO historial (accion, producto_id, nombre, descripcion, cantidad, precio)
+                            VALUES ('Eliminar', ?, ?, ?, ?, ?)
+                        """, (id_producto, nombre, descripcion, cantidad, precio))
             conn.commit()
-
-            print(f"Producto con ID {id_producto} eliminado correctamente.")
 
         else:
             print(f"No se encontró el producto con ID {id_producto}.")
@@ -181,5 +199,3 @@ def eliminar_producto(id_producto):
 
 if __name__ == "__main__":
     create_tables()
-    listar_productos()
-    listar_historial()
