@@ -84,7 +84,7 @@ def listar_productos():
     conn.close()
 
     if productos:
-        print(tabulate(productos, headers=["ID", "Nombre", "Descripción", "Cantidad", "Precio"], tablefmt="grid"))
+        return productos
     else:
         print("No hay productos en el inventario.")
 
@@ -97,74 +97,51 @@ def listar_historial():
     conn.close()
 
     if historial:
-        print(tabulate(historial, headers=["ID", "Acción", "Producto ID", "Cantidad", "Precio", "Fecha"], tablefmt="grid"))
+        return historial
     else:
         print("No hay historial de movimientos.")
 
 
-
-def actualizar_producto(id_producto, cantidad=None, precio=None):
-
-    # Actualiza la cantidad o precio de un producto en la base de datos.
-    conn, cursor = connect_db()
-
-    cantidad_anterior = None
-    precio_anterior = None
-
-    # Obtener el estado actual del producto antes de la actualización
-    cursor.execute("SELECT cantidad, precio FROM productos WHERE id = ?", (id_producto,))
-    producto = cursor.fetchone()
-
-    if producto:
-        cantidad_anterior, precio_anterior = producto
-
-    # Crear la consulta para actualizar
-    query = "UPDATE productos SET"
-    params = []
-
-    if cantidad is not None:
-        query += " cantidad = ?"
-        params.append(cantidad)
-
-    if precio is not None:
-        if cantidad is not None:
-            query += ","
-        query += " precio = ?"
-        params.append(precio)
-
-    query += " WHERE id = ?"
-    params.append(id_producto)
-
+def actualizar_producto(id_producto, nombre=None, descripcion=None, cantidad=None, precio=None):
+    """Actualiza un producto en la base de datos con manejo de errores y usando 'with' para conexión."""
     try:
-        cursor.execute(query, params)
-        conn.commit()
+        with sqlite3.connect('inventario.db') as conn:
+            cursor = conn.cursor()
 
-        # Registrar el movimiento en el historial
-        accion = "Actualizar"
-        if cantidad is not None and cantidad != cantidad_anterior:
-            cursor.execute("""
-                INSERT INTO historial (accion, producto_id, cantidad)
-                VALUES (?, ?, ?)
-            """, (accion, id_producto, cantidad - cantidad_anterior))
+            # Verificar si el producto existe antes de intentar actualizar
+            cursor.execute("SELECT * FROM productos WHERE id = ?", (id_producto,))
+            producto = cursor.fetchone()
 
-        if precio is not None and precio != precio_anterior:
-            cursor.execute("""
-                INSERT INTO historial (accion, producto_id, precio)
-                VALUES (?, ?, ?)
-            """, (accion, id_producto, precio))
+            if not producto:
+                raise ValueError(f"El producto con ID {id_producto} no existe.")
 
-        conn.commit()
+            if nombre is not None:
+                cursor.execute("UPDATE productos SET nombre = ? WHERE id = ?", (nombre, id_producto))
 
-        if cursor.rowcount > 0:
-            print(f"Producto con ID {id_producto} actualizado correctamente.")
-        else:
-            print(f"No se encontró el producto con ID {id_producto}.")
+            if descripcion is not None:
+                cursor.execute("UPDATE productos SET descripcion = ? WHERE id = ?", (descripcion, id_producto))
 
-    except sqlite3.Error as e:
-        print(f"Error en la base de datos: {e}")
+            if cantidad is not None:
+                cursor.execute("UPDATE productos SET cantidad = ? WHERE id = ?", (cantidad, id_producto))
 
-    finally:
-        conn.close()
+            if precio is not None:
+                cursor.execute("UPDATE productos SET precio = ? WHERE id = ?", (precio, id_producto))
+
+            conn.commit()
+
+    except ValueError as e:
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"Error al actualizar el producto: {e}")
+
+
+def obtener_producto_por_id(id_producto):
+    # Obtiene los detalles de un producto por su ID
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM productos WHERE id = ?", (id_producto,))
+    producto = cursor.fetchone()
+    conn.close()
+    return producto
 
 
 def eliminar_producto(id_producto):
