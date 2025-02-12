@@ -1,5 +1,7 @@
 import sqlite3
-from tabulate import tabulate
+from flask_bcrypt import Bcrypt
+
+bcrypt = Bcrypt()
 
 
 DB_NAME = "inventario.db"
@@ -41,8 +43,36 @@ def create_tables():
             )
         """)
 
+    cursor.execute("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    usuario_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL,
+                    rol TEXT NOT NULL DEFAULT 'usuario',
+                    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
     conn.commit()
     conn.close()
+
+
+def registrar_usuario(nombre, email, password, rol='usuario'):
+    """Registra un nuevo usuario con contraseña encriptada y rol opcional."""
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    conn, cursor = connect_db()
+    try:
+        cursor.execute("""
+            INSERT INTO usuarios (nombre, email, password, rol)
+            VALUES (?, ?, ?, ?)
+        """, (nombre, email, hashed_password, rol))
+        conn.commit()
+        print(f"Usuario {nombre} registrado exitosamente.")
+    except sqlite3.Error as e:
+        print(f"Error al registrar el usuario: {e}")
+    finally:
+        conn.close()
 
 
 def agregar_producto(nombre, descripcion, cantidad, precio):
@@ -196,6 +226,22 @@ def eliminar_producto(id_producto):
     finally:
         conn.close()
 
+
+def crear_admin():
+    # Encriptar la contraseña
+    password = 'contra123'
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+
+    # Insertar el usuario admin en la base de datos
+    conn, cursor = connect_db()
+    cursor.execute("""
+        INSERT INTO usuarios (nombre, email, password, rol)
+        VALUES (?, ?, ?, ?)
+    """, ('Administrador', 'admin@ejemplo.com', hashed_password, 'admin'))
+    conn.commit()
+    conn.close()
+
+    print("Usuario admin creado correctamente")
 
 if __name__ == "__main__":
     create_tables()
