@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Editar Productos en la Orden #{{ orden[0] }}</h2>
+
+<form method="POST">
+    <table>
+        <tr>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Precio Unitario</th>
+            <th>Acción</th>
+        </tr>
+        {% for detalle in detalles %}
+        <tr>
+            <td>{{ detalle[1] }}</td>  <!-- Nombre del producto -->
+            <td>
+                <input type="number" name="cantidad_{{ detalle[0] }}" value="{{ detalle[2] }}" min="0">
+            </td>
+            <td>{{ detalle[3] }}</td>  <!-- Precio unitario -->
+            <td>
+                <button type="submit" name="eliminar_{{ detalle[0] }}" value="1">Eliminar</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    <button type="submit">Actualizar Orden</button>
+</form>
+
+<a href="{{ url_for('listar_ordenes') }}">Volver a Órdenes</a>
+{% endblock %}

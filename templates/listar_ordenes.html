@@ -24,7 +24,8 @@
                         <td>{{ orden[3] }}</td>  <!-- Estado -->
                         <td>{{ orden[4] }}</td>  <!-- Nombre -->
                         <td>
-                            <a class="btn btn-warning btn-sm">Actualizar</a>
+                            <a href="/orden/{{ orden[0] }}" class="btn btn-warning btn-sm">Ver</a>
+                            <a href="{{ url_for('editar_orden', orden_id=orden[0]) }}" class="btn btn-warning btn-sm">Editar</a>
                             <a class="btn btn-danger btn-sm">Eliminar</a>
                         </td>
                     </tr>

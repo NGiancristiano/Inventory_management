@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Editar Orden #{{ orden[0] }}</h2>
+
+<form method="POST">
+    <label for="estado">Estado de la orden:</label>
+    <select name="estado" id="estado">
+        {% if orden[4] == 'Pendiente' %}
+            <option value="Pendiente" selected>Pendiente</option>
+        {% else %}
+            <option value="Pendiente">Pendiente</option>
+        {% endif %}
+        {% if orden[4] == 'En proceso' %}
+            <option value="En proceso" selected>En proceso</option>
+        {% else %}
+            <option value="En proceso" >En proceso</option>
+        {% endif %}
+        {% if orden[4] == 'Completada' %}
+            <option value="Completada" selected>Completada</option>
+        {% else %}
+            <option value="Completada" >Completada</option>
+        {% endif %}
+    </select>
+    <br><br>
+    <button type="submit">Actualizar Orden</button>
+</form>
+
+<a href="{{ url_for('listar_ordenes') }}">Volver a Órdenes</a>
+{% endblock %}

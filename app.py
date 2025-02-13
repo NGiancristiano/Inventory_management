@@ -279,7 +279,6 @@ def agregar_al_carrito(id_producto):
     return redirect(url_for('mostrar_productos'))
 
 
-
 @app.route('/carrito')
 def mostrar_carrito():
     carrito = session.get('carrito', {})
@@ -371,21 +370,6 @@ def mostrar_orden(orden_id):
 
     return render_template('orden.html', detalles=detalles)
 
-'''
-@app.route('/crear_orden', methods=['POST'])
-@login_required
-def crear_orden_view():
-    carrito = session.get('carrito', [])
-    if not carrito:
-        return redirect(url_for('productos'))  # Si el carrito está vacío, no se puede comprar
-
-    orden_id = crear_orden(current_user.id, carrito)
-    if orden_id:
-        session['carrito'] = []  # Vaciar el carrito después de la compra
-        return redirect(url_for('ver_orden', id=orden_id))
-    else:
-        return "Error al procesar la orden", 500'''
-
 
 @app.route('/ordenes')
 @login_required
@@ -401,34 +385,80 @@ def listar_ordenes():
 
     return render_template('listar_ordenes.html', ordenes=ordenes)
 
-'''
-@app.route('/orden/<int:id>')
+
+@app.route('/editar_orden/<int:orden_id>', methods=['GET', 'POST'])
 @login_required
-def ver_orden(id):
+def editar_orden(orden_id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Solo admin puede editar órdenes
+
     conn, cursor = connect_db()
 
-    # Obtener los datos de la orden
-    cursor.execute("""
-        SELECT o.orden_id, o.fecha, o.total, o.estado, u.nombre
-        FROM ordenes o
-        JOIN usuarios u ON o.usuario_id = u.usuario_id
-        WHERE o.orden_id = ?
-    """, (id,))
+    # Obtener la orden y sus detalles
+    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
     orden = cursor.fetchone()
 
-    # Obtener los productos de la orden
+    if not orden:
+        conn.close()
+        return redirect(url_for('listar_ordenes'))  # Redirige si la orden no existe
+
+    if request.method == 'POST':
+        nuevo_estado = request.form['estado']
+        cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
+
+    conn.close()
+    return render_template('editar_orden.html', orden=orden)
+
+
+@app.route('/editar_detalles_orden/<int:orden_id>', methods=['GET', 'POST'])
+@login_required
+def editar_detalles_orden(orden_id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Solo admin puede editar órdenes
+
+    conn, cursor = connect_db()
+
+    # Obtener la orden
+    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
+    orden = cursor.fetchone()
+
+    if not orden:
+        conn.close()
+        return redirect(url_for('listar_ordenes'))  # Redirigir si la orden no existe
+
+    # Obtener los detalles de la orden
     cursor.execute("""
-        SELECT p.nombre, d.cantidad, d.precio_unitario
+        SELECT d.detalle_id, p.nombre, d.cantidad, d.precio_unitario
         FROM detalles_orden d
         JOIN productos p ON d.producto_id = p.id
         WHERE d.orden_id = ?
-    """, (id,))
-    productos = cursor.fetchall()
+    """, (orden_id,))
+    detalles = cursor.fetchall()
+
+    if request.method == 'POST':
+        for detalle in detalles:
+            detalle_id = detalle[0]
+            nueva_cantidad = request.form.get(f'cantidad_{detalle_id}')
+
+            if nueva_cantidad and int(nueva_cantidad) > 0:
+                cursor.execute("""
+                    UPDATE detalles_orden SET cantidad = ? WHERE detalle_id = ?
+                """, (int(nueva_cantidad), detalle_id))
+            else:
+                cursor.execute("""
+                    DELETE FROM detalles_orden WHERE detalle_id = ?
+                """, (detalle_id,))
+
+        conn.commit()
+        conn.close()
+        return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
 
     conn.close()
+    return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles)
 
-    return render_template('ver_orden.html', orden=orden, productos=productos)
-'''
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -4,7 +4,8 @@
     <h2>Orden {{ detalles[0][0] }}</h2>
     <p>Fecha: {{ detalles[0][1] }}</p>
     <p>Estado: {{ detalles[0][2] }}</p>
-
+    <a href="{{ url_for('editar_detalles_orden', orden_id=detalles[0][0]) }}">Editar Productos</a>
+    <a href="/ordenes" >Volver</a>
     <ul>
         {% for detalle in detalles %}
             <li>{{ detalle[3] }} - Cantidad: {{ detalle[4] }} - Precio: ${{ detalle[5] }} - Total: ${{ detalle[4] * detalle[5] }}</li>
