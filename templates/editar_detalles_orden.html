@@ -24,7 +24,19 @@
         </tr>
         {% endfor %}
     </table>
-    <br>
+
+    <h3>Agregar un nuevo producto</h3>
+    <label for="nuevo_producto">Producto:</label>
+    <select name="nuevo_producto">
+        {% for producto in productos_disponibles %}
+            <option value="{{ producto[0] }}">{{ producto[1] }} - ${{ producto[2] }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="nueva_cantidad">Cantidad:</label>
+    <input type="number" name="nueva_cantidad" min="1">
+
+    <br><br>
     <button type="submit">Actualizar Orden</button>
 </form>
 

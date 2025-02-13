@@ -438,6 +438,10 @@ def editar_detalles_orden(orden_id):
     """, (orden_id,))
     detalles = cursor.fetchall()
 
+    # Obtener productos disponibles para agregar
+    cursor.execute("SELECT id, nombre, precio FROM productos")
+    productos_disponibles = cursor.fetchall()
+
     if request.method == 'POST':
         for detalle in detalles:
             detalle_id = detalle[0]
@@ -452,12 +456,27 @@ def editar_detalles_orden(orden_id):
                     DELETE FROM detalles_orden WHERE detalle_id = ?
                 """, (detalle_id,))
 
+
+        # Agregar un nuevo producto a la orden
+        nuevo_producto_id = request.form.get("nuevo_producto")
+        nueva_cantidad = request.form.get("nueva_cantidad")
+
+        if nuevo_producto_id and nueva_cantidad and int(nueva_cantidad) > 0:
+            cursor.execute("SELECT precio FROM productos WHERE id = ?", (nuevo_producto_id,))
+            precio_unitario = cursor.fetchone()[0]
+
+            cursor.execute("""
+                    INSERT INTO detalles_orden (orden_id, producto_id, cantidad, precio_unitario)
+                    VALUES (?, ?, ?, ?)
+                """, (orden_id, nuevo_producto_id, int(nueva_cantidad), precio_unitario))
+
+
         conn.commit()
         conn.close()
         return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
 
     conn.close()
-    return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles)
+    return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles, productos_disponibles=productos_disponibles)
 
 
 if __name__ == '__main__':
