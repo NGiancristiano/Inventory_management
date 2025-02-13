@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2 class="text-center">Lista de Ordenes</h2>
+
+    {% if ordenes %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Fecha</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Nombre</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for orden in ordenes %}
+                    <tr>
+                        <td>{{ orden[0] }}</td>  <!-- ID -->
+                        <td>{{ orden[1] }}</td>  <!-- Fecha -->
+                        <td>{{ orden[2] }}</td>  <!-- Total -->
+                        <td>{{ orden[3] }}</td>  <!-- Estado -->
+                        <td>{{ orden[4] }}</td>  <!-- Nombre -->
+                        <td>
+                            <a class="btn btn-warning btn-sm">Actualizar</a>
+                            <a class="btn btn-danger btn-sm">Eliminar</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No hay ordenes registradas.</p>
+    {% endif %}
+{% endblock %}

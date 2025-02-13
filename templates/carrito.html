@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Mi Carrito</h2>
+    <ul>
+        {% for item in productos %}
+            <li>{{ item.nombre }} - Cantidad: {{ item.cantidad }} - Precio: ${{ item.precio }} - Total: ${{ item.total }}</li>
+        {% endfor %}
+    </ul>
+    <h3>Total: ${{ total }}</h3>
+    <form method="POST" action="{{ url_for('crear_orden') }}">
+        <button type="submit">Crear orden</button>
+    </form>
+{% endblock %}

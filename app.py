@@ -1,8 +1,8 @@
 import sqlite3
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from database import agregar_producto, listar_productos, actualizar_producto, eliminar_producto, listar_historial, \
-    obtener_producto_por_id, connect_db
+    obtener_producto_por_id, connect_db, crear_orden
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from auth import verificar_usuario, Usuario
 from flask_bcrypt import Bcrypt
@@ -248,6 +248,187 @@ def eliminar_usuario(id):
     return render_template('eliminar_usuario.html', usuario=usuario)
 
 
+@app.route('/productos')
+def mostrar_productos():
+    productos = listar_productos()
+    return render_template('productos.html', productos=productos)
+
+
+@app.route('/agregar_al_carrito/<int:id_producto>', methods=['POST'])
+@login_required
+def agregar_al_carrito(id_producto):
+    cantidad = int(request.form.get('cantidad', 1))  # Asegurar que la cantidad sea int
+
+    if 'carrito' not in session:
+        session['carrito'] = {}
+
+    carrito = session['carrito']
+
+    # Convertir las claves del carrito a int para evitar errores de comparación
+    carrito = {int(k): v for k, v in carrito.items()}
+
+    # Agregar o actualizar la cantidad
+    if id_producto in carrito:
+        carrito[id_producto] += cantidad
+    else:
+        carrito[id_producto] = cantidad
+
+    session['carrito'] = carrito  # Guardar cambios en la sesión
+    session.modified = True
+
+    return redirect(url_for('mostrar_productos'))
+
+
+
+@app.route('/carrito')
+def mostrar_carrito():
+    carrito = session.get('carrito', {})
+    productos_carrito = []
+    total = 0
+    if carrito:
+        conn, cursor = connect_db()
+        for id_producto, cantidad in carrito.items():
+            cursor.execute("SELECT * FROM productos WHERE id = ?", (id_producto,))
+            producto = cursor.fetchone()
+            if producto:
+                total += producto[4] * cantidad  # producto[4] es el precio
+                productos_carrito.append({
+                    'nombre': producto[1],
+                    'cantidad': cantidad,
+                    'precio': producto[4],
+                    'total': producto[4] * cantidad
+                })
+        conn.close()
+
+    return render_template('carrito.html', productos=productos_carrito, total=total)
+
+
+@app.route('/crear_orden', methods=['POST'])
+@login_required
+def crear_orden():
+    conn, cursor = connect_db()
+
+    # Obtener productos del carrito
+    carrito = session.get('carrito', {})
+
+    if not carrito:
+        flash("El carrito está vacío.", "warning")
+        return redirect(url_for('ver_carrito'))
+
+    try:
+        total = 0  # Variable para almacenar el total de la orden
+
+        # Insertar la orden en la base de datos con un estado inicial "Pendiente"
+        cursor.execute("INSERT INTO ordenes (usuario_id, total, estado) VALUES (?, ?, 'Pendiente')",
+                       (current_user.id, total))
+        orden_id = cursor.lastrowid  # Obtener el ID de la orden recién creada
+
+        # Insertar cada producto en la tabla detalles_orden
+        for id_producto, cantidad in carrito.items():
+            cursor.execute("SELECT precio FROM productos WHERE id = ?", (id_producto,))
+            producto = cursor.fetchone()
+
+            if producto:
+                precio_unitario = producto[0]
+                subtotal = precio_unitario * cantidad  # Calcular subtotal por producto
+                total += subtotal  # Sumar al total de la orden
+
+                cursor.execute("""
+                    INSERT INTO detalles_orden (orden_id, producto_id, cantidad, precio_unitario)
+                    VALUES (?, ?, ?, ?)
+                """, (orden_id, id_producto, cantidad, precio_unitario))
+
+        # Actualizar el total de la orden después de calcularlo
+        cursor.execute("UPDATE ordenes SET total = ? WHERE orden_id = ?", (total, orden_id))
+
+        conn.commit()
+        session['carrito'] = {}  # Vaciar el carrito después de crear la orden
+        flash("Orden creada exitosamente.", "success")
+        return redirect(url_for('mostrar_orden', orden_id=orden_id))
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        flash(f"Error al crear la orden: {e}", "danger")
+        return redirect(url_for('ver_carrito'))
+
+    finally:
+        conn.close()
+
+
+@app.route('/orden/<int:orden_id>')
+@login_required
+def mostrar_orden(orden_id):
+    conn, cursor = connect_db()
+    cursor.execute("""
+        SELECT o.orden_id, o.fecha, o.estado, p.nombre, do.cantidad, do.precio_unitario
+        FROM ordenes o
+        JOIN detalles_orden do ON o.orden_id = do.orden_id
+        JOIN productos p ON do.producto_id = p.id
+        WHERE o.orden_id = ?
+    """, (orden_id,))
+    detalles = cursor.fetchall()
+    conn.close()
+
+    return render_template('orden.html', detalles=detalles)
+
+'''
+@app.route('/crear_orden', methods=['POST'])
+@login_required
+def crear_orden_view():
+    carrito = session.get('carrito', [])
+    if not carrito:
+        return redirect(url_for('productos'))  # Si el carrito está vacío, no se puede comprar
+
+    orden_id = crear_orden(current_user.id, carrito)
+    if orden_id:
+        session['carrito'] = []  # Vaciar el carrito después de la compra
+        return redirect(url_for('ver_orden', id=orden_id))
+    else:
+        return "Error al procesar la orden", 500'''
+
+
+@app.route('/ordenes')
+@login_required
+def listar_ordenes():
+    conn, cursor = connect_db()
+    cursor.execute("""
+        SELECT o.orden_id, o.fecha, o.total, o.estado, u.nombre
+        FROM ordenes o
+        JOIN usuarios u ON o.usuario_id = u.usuario_id
+    """)
+    ordenes = cursor.fetchall()
+    conn.close()
+
+    return render_template('listar_ordenes.html', ordenes=ordenes)
+
+'''
+@app.route('/orden/<int:id>')
+@login_required
+def ver_orden(id):
+    conn, cursor = connect_db()
+
+    # Obtener los datos de la orden
+    cursor.execute("""
+        SELECT o.orden_id, o.fecha, o.total, o.estado, u.nombre
+        FROM ordenes o
+        JOIN usuarios u ON o.usuario_id = u.usuario_id
+        WHERE o.orden_id = ?
+    """, (id,))
+    orden = cursor.fetchone()
+
+    # Obtener los productos de la orden
+    cursor.execute("""
+        SELECT p.nombre, d.cantidad, d.precio_unitario
+        FROM detalles_orden d
+        JOIN productos p ON d.producto_id = p.id
+        WHERE d.orden_id = ?
+    """, (id,))
+    productos = cursor.fetchall()
+
+    conn.close()
+
+    return render_template('ver_orden.html', orden=orden, productos=productos)
+'''
 
 if __name__ == '__main__':
     app.run(debug=True)

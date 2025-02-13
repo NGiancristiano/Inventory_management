@@ -43,6 +43,7 @@ def create_tables():
             )
         """)
 
+    # Crear tabla de usuarios
     cursor.execute("""
                 CREATE TABLE IF NOT EXISTS usuarios (
                     usuario_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +54,31 @@ def create_tables():
                     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+    # Tabla de órdenes (ventas)
+    cursor.execute("""
+           CREATE TABLE IF NOT EXISTS ordenes (
+               orden_id INTEGER PRIMARY KEY AUTOINCREMENT,
+               usuario_id INTEGER NOT NULL,
+               total REAL NOT NULL,
+               fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+               estado TEXT DEFAULT 'pendiente',
+               FOREIGN KEY (usuario_id) REFERENCES usuarios(usuario_id)
+           )
+       """)
+
+    # Tabla de detalles de la orden (productos vendidos)
+    cursor.execute("""
+           CREATE TABLE IF NOT EXISTS detalles_orden (
+               detalle_id INTEGER PRIMARY KEY AUTOINCREMENT,
+               orden_id INTEGER NOT NULL,
+               producto_id INTEGER NOT NULL,
+               cantidad INTEGER NOT NULL,
+               precio_unitario REAL NOT NULL,
+               FOREIGN KEY (orden_id) REFERENCES ordenes(orden_id),
+               FOREIGN KEY (producto_id) REFERENCES productos(id)
+           )
+       """)
 
     conn.commit()
     conn.close()
@@ -242,6 +268,33 @@ def crear_admin():
     conn.close()
 
     print("Usuario admin creado correctamente")
+
+
+def crear_orden(usuario_id, productos):
+    """Registra una nueva orden y sus productos vendidos"""
+    conn, cursor = connect_db()
+    try:
+        total = sum(p['precio'] * p['cantidad'] for p in productos)
+        cursor.execute("INSERT INTO ordenes (usuario_id, total) VALUES (?, ?)", (usuario_id, total))
+        orden_id = cursor.lastrowid
+
+        for p in productos:
+            cursor.execute("""
+                INSERT INTO detalles_orden (orden_id, producto_id, cantidad, precio_unitario) 
+                VALUES (?, ?, ?, ?)
+            """, (orden_id, p['id'], p['cantidad'], p['precio']))
+
+            # Actualizar el stock del producto
+            cursor.execute("UPDATE productos SET cantidad = cantidad - ? WHERE id = ?", (p['cantidad'], p['id']))
+
+        conn.commit()
+        return orden_id
+    except Exception as e:
+        print(f"Error al registrar la orden: {e}")
+        return None
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     create_tables()
