@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+    {% if usuarios %}
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for usuario in usuarios %}
+            <tr>
+              <td>{{ usuario[0] }}</td>
+              <td>{{ usuario[1] }}</td>
+              <td>{{ usuario[2] }}</td>
+              <td>{{ usuario[4] }}</td>
+              <td>
+                  {% if current_user.is_authenticated and current_user.rol == 'admin' %}
+                    <a href="{{ url_for('editar_usuario', id=usuario[0]) }}">Editar</a> |
+                    <a href="{{ url_for('eliminar_usuario', id=usuario[0]) }}">Eliminar</a>
+                  {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+    {% else %}
+        <p>No hay usuarios registrados.</p>
+    {% endif %}
+
+{% endblock %}

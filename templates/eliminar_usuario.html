@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2 class="text-center">Confirmar Eliminación</h2>
+
+    <div class="alert alert-warning">
+        <strong>¿Estás seguro de que deseas eliminar el usuario "{{ usuario[1] }}"?</strong>
+        <p>Esta acción no se puede deshacer.</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('eliminar_usuario', id=usuario[0]) }}">
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="/usuarios" class="btn btn-secondary">Cancelar</a>
+    </form>
+{% endblock %}

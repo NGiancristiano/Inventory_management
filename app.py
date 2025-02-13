@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
+
+from flask import Flask, render_template, request, redirect, url_for, flash
 from database import agregar_producto, listar_productos, actualizar_producto, eliminar_producto, listar_historial, \
     obtener_producto_por_id, connect_db
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
@@ -10,6 +12,11 @@ app.secret_key = 'secret_key_here'
 login_manager = LoginManager()
 login_manager.init_app(app)
 bcrypt = Bcrypt()
+
+# Configurar la ruta de redirección al login
+login_manager.login_view = "login"  # Nombre de la función de la vista de login
+login_manager.login_message = "Debes iniciar sesión para acceder a esta página."  # Mensaje opcional
+login_manager.login_message_category = "warning"  # Categoría de mensajes flash
 
 
 # Cargar usuario desde la base de datos (Flask-Login)
@@ -73,12 +80,29 @@ def register():
     return render_template('register.html')
 
 
-@app.route('/admin-dashboard')
+@app.route('/admin_dashboard')
 @login_required
 def admin_dashboard():
     if current_user.rol != 'admin':
-        return redirect(url_for('index'))  # Redirige a la página principal si no es admin
-    return render_template('admin_dashboard.html')
+        return redirect(url_for('index'))
+
+    conn, cursor = connect_db()
+    cursor.execute("SELECT COUNT(*) FROM usuarios")
+    total_usuarios = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM productos")
+    total_productos = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM historial")
+    total_movimientos = cursor.fetchone()[0]
+
+    conn.close()
+
+    return render_template('admin_dashboard.html',
+                           total_usuarios=total_usuarios,
+                           total_productos=total_productos,
+                           total_movimientos=total_movimientos)
+
 
 # Ruta para el dashboard
 @app.route('/dashboard')
@@ -152,6 +176,78 @@ def confirmar_eliminar(id_producto):
 def historial():
     historial_movimientos = listar_historial()
     return render_template('listar_historial.html', historial=historial_movimientos)
+
+
+@app.route('/usuarios')
+@login_required
+def usuarios():
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Redirigir si no es admin
+
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM usuarios")
+    users = cursor.fetchall()
+    conn.close()
+
+    return render_template('usuarios.html', usuarios=users)
+
+
+@app.route('/editar_usuario/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_usuario(id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Redirigir si no es admin
+
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (id,))
+    usuario = cursor.fetchone()
+
+    if not usuario:
+        conn.close()
+        return redirect(url_for('usuarios'))
+
+    if request.method == 'POST':
+        nombre = request.form['nombre']
+        email = request.form['email']
+        rol = request.form['rol']
+
+        cursor.execute("""
+            UPDATE usuarios SET nombre = ?, email = ?, rol = ?
+            WHERE usuario_id = ?
+        """, (nombre, email, rol, id))
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for('usuarios'))
+
+    conn.close()
+    return render_template('editar_usuario.html', usuario=usuario)
+
+
+@app.route('/eliminar_usuario/<int:id>', methods=['GET', 'POST'])
+@login_required
+def eliminar_usuario(id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Redirigir si no es admin
+
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (id,))
+    usuario = cursor.fetchone()
+
+    if not usuario:
+        conn.close()
+        return redirect(url_for('usuarios'))
+
+    if request.method == 'POST':
+        cursor.execute("DELETE FROM usuarios WHERE usuario_id = ?", (id,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('usuarios'))
+
+    conn.close()
+    return render_template('eliminar_usuario.html', usuario=usuario)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
