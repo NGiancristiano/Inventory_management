@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2 class="text-center">Confirmar Eliminación</h2>
+
+    <div class="alert alert-warning">
+        <strong>¿Estás seguro de que deseas eliminar la orden "{{ orden[0] }}"?</strong>
+        <p>Esta acción no se puede deshacer.</p>
+    </div>
+
+    <form method="POST">
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{{url_for('listar_ordenes') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+{% endblock %}

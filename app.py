@@ -479,5 +479,30 @@ def editar_detalles_orden(orden_id):
     return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles, productos_disponibles=productos_disponibles)
 
 
+@app.route('/eliminar_orden/<int:orden_id>',methods=['GET', 'POST'])
+@login_required
+def eliminar_orden(orden_id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('index'))  # Solo admin puede editar órdenes
+
+    conn, cursor = connect_db()
+
+    # Obtener la orden y sus detalles
+    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
+    orden = cursor.fetchone()
+
+    if not orden:
+        conn.close()
+        return redirect(url_for('listar_ordenes'))  # Redirige si la orden no existe
+
+    if request.method == 'POST':
+        cursor.execute("DELETE FROM ordenes WHERE orden_id = ?", (orden_id,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('listar_ordenes'))
+
+    conn.close()
+    return render_template('eliminar_orden.html', orden=orden)
+
 if __name__ == '__main__':
     app.run(debug=True)

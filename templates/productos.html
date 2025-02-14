@@ -1,16 +1,27 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Productos Disponibles</h2>
-    <ul>
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Productos Disponibles</h2>
+    <div class="row">
         {% for producto in productos %}
-            <li>
-                <strong>{{ producto[1] }}</strong> - ${{ producto[4] }} (Stock: {{ producto[3] }})
-                <form action="{{ url_for('agregar_al_carrito', id_producto=producto[0]) }}" method="POST">
-                    <input type="number" name="cantidad" min="1" max="{{ producto[3] }}" required>
-                    <button type="submit">Añadir al Carrito</button>
-                </form>
-            </li>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">{{ producto[1] }}</h5>
+                    <p class="card-text">Precio: <strong>${{ producto[4] }}</strong></p>
+                    <p class="card-text">Stock disponible: <strong>{{ producto[3] }}</strong></p>
+                    <form action="{{ url_for('agregar_al_carrito', id_producto=producto[0]) }}" method="POST">
+                        <div class="input-group mb-2">
+                            <input type="number" name="cantidad" class="form-control" min="1" max="{{ producto[3] }}" required>
+                            <button type="submit" class="btn btn-primary">Añadir al Carrito</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
+</div>
 {% endblock %}
+

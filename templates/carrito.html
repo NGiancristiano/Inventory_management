@@ -1,14 +1,21 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Mi Carrito</h2>
-    <ul>
-        {% for item in productos %}
-            <li>{{ item.nombre }} - Cantidad: {{ item.cantidad }} - Precio: ${{ item.precio }} - Total: ${{ item.total }}</li>
-        {% endfor %}
-    </ul>
-    <h3>Total: ${{ total }}</h3>
-    <form method="POST" action="{{ url_for('crear_orden') }}">
-        <button type="submit">Crear orden</button>
-    </form>
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Mi Carrito</h2>
+    <div class="card shadow-sm p-4">
+        <ul class="list-group mb-3">
+            {% for item in productos %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>{{ item.nombre }}</strong> - Cantidad: {{ item.cantidad }} - Precio: ${{ item.precio }}</span>
+                    <span class="badge bg-primary rounded-pill">Total: ${{ item.total }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+        <h3 class="text-end">Total: ${{ total }}</h3>
+        <form method="POST" action="{{ url_for('crear_orden') }}" class="text-center mt-3">
+            <button type="submit" class="btn btn-success">Crear orden</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
