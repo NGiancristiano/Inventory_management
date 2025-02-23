@@ -80,6 +80,19 @@ def create_tables():
            )
        """)
 
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS historial_ordenes (
+                historial_o_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                orden_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                accion TEXT NOT NULL,
+                detalle_cambio TEXT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (orden_id) REFERENCES ordenes (orden_id),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (usuario_id)
+            )
+        """)
+
     conn.commit()
     conn.close()
 
@@ -294,6 +307,16 @@ def crear_orden(usuario_id, productos):
         return None
     finally:
         conn.close()
+
+
+def registrar_cambio_orden(conn, orden_id, usuario_id, accion, detalle_cambio):
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO historial_ordenes (orden_id, usuario_id, accion, detalle_cambio)
+        VALUES (?, ?, ?, ?)
+    """, (orden_id, usuario_id, accion, detalle_cambio))
+    conn.commit()
+
 
 
 if __name__ == "__main__":

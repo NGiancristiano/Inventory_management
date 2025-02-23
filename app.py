@@ -2,7 +2,7 @@ import sqlite3
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from database import agregar_producto, listar_productos, actualizar_producto, eliminar_producto, listar_historial, \
-    obtener_producto_por_id, connect_db, crear_orden
+    obtener_producto_por_id, connect_db, crear_orden, registrar_cambio_orden
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from auth import verificar_usuario, Usuario
 from flask_bcrypt import Bcrypt
@@ -421,61 +421,84 @@ def editar_detalles_orden(orden_id):
 
     conn, cursor = connect_db()
 
-    # Obtener la orden
-    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
-    orden = cursor.fetchone()
+    try:
+        # Obtener la orden
+        cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
+        orden = cursor.fetchone()
 
-    if not orden:
-        conn.close()
-        return redirect(url_for('listar_ordenes'))  # Redirigir si la orden no existe
+        if not orden:
+            return redirect(url_for('listar_ordenes'))  # Redirigir si la orden no existe
 
-    # Obtener los detalles de la orden
-    cursor.execute("""
-        SELECT d.detalle_id, p.nombre, d.cantidad, d.precio_unitario
-        FROM detalles_orden d
-        JOIN productos p ON d.producto_id = p.id
-        WHERE d.orden_id = ?
-    """, (orden_id,))
-    detalles = cursor.fetchall()
+        # Obtener los detalles de la orden
+        cursor.execute("""
+            SELECT d.detalle_id, p.nombre, d.cantidad, d.precio_unitario
+            FROM detalles_orden d
+            JOIN productos p ON d.producto_id = p.id
+            WHERE d.orden_id = ?
+        """, (orden_id,))
+        detalles = cursor.fetchall()
 
-    # Obtener productos disponibles para agregar
-    cursor.execute("SELECT id, nombre, precio FROM productos")
-    productos_disponibles = cursor.fetchall()
+        # Obtener productos disponibles para agregar
+        cursor.execute("SELECT id, nombre, precio FROM productos")
+        productos_disponibles = cursor.fetchall()
 
-    if request.method == 'POST':
-        for detalle in detalles:
-            detalle_id = detalle[0]
-            nueva_cantidad = request.form.get(f'cantidad_{detalle_id}')
+        if request.method == 'POST':
+            for detalle in detalles:
+                detalle_id = detalle[0]
+                nueva_cantidad = request.form.get(f'cantidad_{detalle_id}')
 
-            if nueva_cantidad and int(nueva_cantidad) > 0:
+                if nueva_cantidad and int(nueva_cantidad) > 0:
+                    cursor.execute("""
+                        UPDATE detalles_orden SET cantidad = ? WHERE detalle_id = ?
+                    """, (int(nueva_cantidad), detalle_id))
+
+                    # Registrar el cambio en el historial
+                    registrar_cambio_orden(conn, orden_id, current_user.id, "Actualización",
+                                           f"Modificó cantidad de '{detalle[1]}' a {nueva_cantidad}")
+                else:
+                    cursor.execute("""
+                        DELETE FROM detalles_orden WHERE detalle_id = ?
+                    """, (detalle_id,))
+
+                    # Registrar el cambio en el historial
+                    registrar_cambio_orden(conn, orden_id, current_user.id, "Eliminación",
+                                           f"Modificó cantidad de '{detalle[1]}' a 0")
+
+
+            # Agregar un nuevo producto a la orden
+            nuevo_producto_id = request.form.get("nuevo_producto")
+            nueva_cantidad = request.form.get("nueva_cantidad")
+
+            if nuevo_producto_id and nueva_cantidad and int(nueva_cantidad) > 0:
+                cursor.execute("SELECT precio, nombre FROM productos WHERE id = ?", (nuevo_producto_id,))
+                precio_unitario, nuevo_producto_nombre = cursor.fetchone()
+
                 cursor.execute("""
-                    UPDATE detalles_orden SET cantidad = ? WHERE detalle_id = ?
-                """, (int(nueva_cantidad), detalle_id))
-            else:
-                cursor.execute("""
-                    DELETE FROM detalles_orden WHERE detalle_id = ?
-                """, (detalle_id,))
-
-
-        # Agregar un nuevo producto a la orden
-        nuevo_producto_id = request.form.get("nuevo_producto")
-        nueva_cantidad = request.form.get("nueva_cantidad")
-
-        if nuevo_producto_id and nueva_cantidad and int(nueva_cantidad) > 0:
-            cursor.execute("SELECT precio FROM productos WHERE id = ?", (nuevo_producto_id,))
-            precio_unitario = cursor.fetchone()[0]
-
-            cursor.execute("""
                     INSERT INTO detalles_orden (orden_id, producto_id, cantidad, precio_unitario)
                     VALUES (?, ?, ?, ?)
                 """, (orden_id, nuevo_producto_id, int(nueva_cantidad), precio_unitario))
 
+                # Registrar el cambio en el historial
+                registrar_cambio_orden(conn,orden_id, current_user.id, "Actualización",
+                                       f"Se agregó el producto: {nuevo_producto_nombre} con el id: {nuevo_producto_id}")
 
-        conn.commit()
-        conn.close()
-        return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
+            # Actualizar el total de la orden
+            cursor.execute("""
+                SELECT SUM(cantidad * precio_unitario) FROM detalles_orden WHERE orden_id = ?
+            """, (orden_id,))
+            nuevo_total = cursor.fetchone()[0] or 0
 
-    conn.close()
+            cursor.execute("UPDATE ordenes SET total = ? WHERE orden_id = ?", (nuevo_total, orden_id))
+
+            conn.commit()
+
+            return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
+    except sqlite3.OperationalError as e:
+        print(f"Error de base de datos: {e}")
+        conn.rollback()  # En caso de error, se revierte la transacción
+        return "Error al procesar la orden. Por favor, inténtalo más tarde."
+    finally:
+        conn.close()  # Asegúrate de cerrar la conexión al final
     return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles, productos_disponibles=productos_disponibles)
 
 
@@ -503,6 +526,24 @@ def eliminar_orden(orden_id):
 
     conn.close()
     return render_template('eliminar_orden.html', orden=orden)
+
+
+@app.route('/historial_orden/<int:orden_id>')
+@login_required
+def historial_orden(orden_id):
+    conn, cursor = connect_db()
+    cursor.execute("""
+        SELECT h.fecha, u.nombre, h.accion, h.detalle_cambio
+        FROM historial_ordenes h
+        JOIN usuarios u ON h.usuario_id = u.usuario_id
+        WHERE h.orden_id = ?
+        ORDER BY h.fecha DESC
+    """, (orden_id,))
+    historial = cursor.fetchall()
+    conn.close()
+
+    return render_template('historial_orden.html', historial=historial)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

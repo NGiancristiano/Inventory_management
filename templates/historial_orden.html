@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Historial de Cambios - Orden #{{ orden_id }}</h2>
+<table border="1">
+    <tr>
+        <th>Fecha</th>
+        <th>Usuario</th>
+        <th>Acción</th>
+        <th>Detalles</th>
+    </tr>
+    {% for cambio in historial %}
+    <tr>
+        <td>{{ cambio[0] }}</td>
+        <td>{{ cambio[1] }}</td>
+        <td>{{ cambio[2] }}</td>
+        <td>{{ cambio[3] }}</td>
+    </tr>
+    {% endfor %}
+</table>
+<a href="{{ url_for('listar_ordenes') }}">Volver a Órdenes</a>
+{% endblock %}
