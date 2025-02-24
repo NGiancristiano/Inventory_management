@@ -9,6 +9,7 @@
         <div class="mb-3">
             {% if current_user.is_authenticated and current_user.rol == 'admin' %}
             <a href="{{ url_for('editar_detalles_orden', orden_id=detalles[0][0]) }}" class="btn btn-warning">Editar</a>
+            <a href="{{ url_for('historial_orden', orden_id=detalles[0][0]) }}" class="btn btn-primary">Historial</a>
             <a href="/ordenes" class="btn btn-secondary">Volver</a>
             {% endif %}
         </div>
