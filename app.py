@@ -35,7 +35,12 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        usuario = verificar_usuario(email, password)
+        try:
+            usuario = verificar_usuario(email, password)
+        except Exception as e:
+            flash("Error al verificar usuario", "danger")
+            return redirect(url_for('login'))
+
         if usuario:
             login_user(usuario)  # Inicia la sesión del usuario
             return redirect(url_for('index'))
@@ -397,6 +402,7 @@ def editar_orden(orden_id):
     # Obtener la orden y sus detalles
     cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
     orden = cursor.fetchone()
+    print(orden)
 
     if not orden:
         conn.close()
@@ -404,6 +410,19 @@ def editar_orden(orden_id):
 
     if request.method == 'POST':
         nuevo_estado = request.form['estado']
+
+        # Verificar si la orden está siendo completada y si antes no lo estaba
+        if nuevo_estado == "Completada" and orden[4] != "Completada":
+            cursor.execute("SELECT producto_id, cantidad FROM detalles_orden WHERE orden_id = ?", (orden_id,))
+            productos = cursor.fetchall()
+
+            for producto in productos:
+                producto_id, cantidad = producto
+                cursor.execute("UPDATE productos SET cantidad = cantidad - ? WHERE id = ?", (cantidad, producto_id))
+
+        cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
+
+
         cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
         conn.commit()
         conn.close()
@@ -447,22 +466,22 @@ def editar_detalles_orden(orden_id):
                 detalle_id = detalle[0]
                 nueva_cantidad = request.form.get(f'cantidad_{detalle_id}')
 
-                if nueva_cantidad and int(nueva_cantidad) > 0:
+                if nueva_cantidad and int(nueva_cantidad) > 0 and int(nueva_cantidad) != detalle[2]:
                     cursor.execute("""
                         UPDATE detalles_orden SET cantidad = ? WHERE detalle_id = ?
                     """, (int(nueva_cantidad), detalle_id))
 
                     # Registrar el cambio en el historial
                     registrar_cambio_orden(conn, orden_id, current_user.id, "Actualización",
-                                           f"Modificó cantidad de '{detalle[1]}' a {nueva_cantidad}")
-                else:
+                                           f"{detalle[1]}: Modificó cantidad de '{detalle[2]}' a {nueva_cantidad}")
+                elif int(nueva_cantidad) <= 0:
                     cursor.execute("""
                         DELETE FROM detalles_orden WHERE detalle_id = ?
                     """, (detalle_id,))
 
                     # Registrar el cambio en el historial
                     registrar_cambio_orden(conn, orden_id, current_user.id, "Eliminación",
-                                           f"Modificó cantidad de '{detalle[1]}' a 0")
+                                           f"{detalle[1]}: Modificó cantidad de '{detalle[2]}' a 0")
 
 
             # Agregar un nuevo producto a la orden
@@ -542,7 +561,7 @@ def historial_orden(orden_id):
     historial = cursor.fetchall()
     conn.close()
 
-    return render_template('historial_orden.html', historial=historial)
+    return render_template('historial_orden.html', historial=historial, orden_id=orden_id)
 
 
 if __name__ == '__main__':
