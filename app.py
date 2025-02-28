@@ -399,37 +399,43 @@ def editar_orden(orden_id):
 
     conn, cursor = connect_db()
 
-    # Obtener la orden y sus detalles
-    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
-    orden = cursor.fetchone()
-    print(orden)
+    try:
+        # Obtener la orden y sus detalles
+        cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
+        orden = cursor.fetchone()
 
-    if not orden:
+        if not orden:
+            return redirect(url_for('listar_ordenes'))  # Redirige si la orden no existe
+
+        if request.method == 'POST':
+            nuevo_estado = request.form['estado']
+
+            # Verificar si la orden está siendo completada y si antes no lo estaba
+            if nuevo_estado == "Completada" and orden[4] != "Completada":
+                cursor.execute("SELECT producto_id, cantidad FROM detalles_orden WHERE orden_id = ?", (orden_id,))
+                productos = cursor.fetchall()
+
+                for producto in productos:
+                    producto_id, cantidad = producto
+                    cursor.execute("UPDATE productos SET cantidad = cantidad - ? WHERE id = ?", (cantidad, producto_id))
+
+            cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
+
+
+            cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
+            conn.commit()
+            return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
+
         conn.close()
-        return redirect(url_for('listar_ordenes'))  # Redirige si la orden no existe
+        return render_template('editar_orden.html', orden=orden)
 
-    if request.method == 'POST':
-        nuevo_estado = request.form['estado']
+    except Exception as e:
+        conn.rollback()  # Revertir cambios en caso de error
+        print(f"Error al editar la orden: {e}")  # Puedes usar logging en lugar de print para producción
+        return "Ocurrió un error al actualizar la orden."
 
-        # Verificar si la orden está siendo completada y si antes no lo estaba
-        if nuevo_estado == "Completada" and orden[4] != "Completada":
-            cursor.execute("SELECT producto_id, cantidad FROM detalles_orden WHERE orden_id = ?", (orden_id,))
-            productos = cursor.fetchall()
-
-            for producto in productos:
-                producto_id, cantidad = producto
-                cursor.execute("UPDATE productos SET cantidad = cantidad - ? WHERE id = ?", (cantidad, producto_id))
-
-        cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
-
-
-        cursor.execute("UPDATE ordenes SET estado = ? WHERE orden_id = ?", (nuevo_estado, orden_id))
-        conn.commit()
+    finally:
         conn.close()
-        return redirect(url_for('listar_ordenes'))  # Redirigir después de actualizar
-
-    conn.close()
-    return render_template('editar_orden.html', orden=orden)
 
 
 @app.route('/editar_detalles_orden/<int:orden_id>', methods=['GET', 'POST'])
@@ -517,7 +523,7 @@ def editar_detalles_orden(orden_id):
         conn.rollback()  # En caso de error, se revierte la transacción
         return "Error al procesar la orden. Por favor, inténtalo más tarde."
     finally:
-        conn.close()  # Asegúrate de cerrar la conexión al final
+        conn.close()
     return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles, productos_disponibles=productos_disponibles)
 
 
@@ -551,17 +557,25 @@ def eliminar_orden(orden_id):
 @login_required
 def historial_orden(orden_id):
     conn, cursor = connect_db()
-    cursor.execute("""
-        SELECT h.fecha, u.nombre, h.accion, h.detalle_cambio
-        FROM historial_ordenes h
-        JOIN usuarios u ON h.usuario_id = u.usuario_id
-        WHERE h.orden_id = ?
-        ORDER BY h.fecha DESC
-    """, (orden_id,))
-    historial = cursor.fetchall()
-    conn.close()
 
-    return render_template('historial_orden.html', historial=historial, orden_id=orden_id)
+    try:
+        cursor.execute("""
+            SELECT h.fecha, u.nombre, h.accion, h.detalle_cambio
+            FROM historial_ordenes h
+            JOIN usuarios u ON h.usuario_id = u.usuario_id
+            WHERE h.orden_id = ?
+            ORDER BY h.fecha DESC
+        """, (orden_id,))
+        historial = cursor.fetchall()
+        return render_template('historial_orden.html', historial=historial, orden_id=orden_id)
+
+    except Exception as e:
+        print(f"Error al obtener el historial de la orden {orden_id}: {e}")  # Puedes usar logging en producción
+        return "Ocurrió un error al cargar el historial."
+
+    finally:
+        conn.close()  # Asegura que la conexión siempre se cierre
+
 
 
 if __name__ == '__main__':
