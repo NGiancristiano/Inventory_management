@@ -19,13 +19,21 @@ login_manager.login_message = "Debes iniciar sesión para acceder a esta página
 login_manager.login_message_category = "warning"  # Categoría de mensajes flash
 
 
-# Cargar usuario desde la base de datos (Flask-Login)
 @login_manager.user_loader
 def load_user(user_id):
     conn, cursor = connect_db()
-    cursor.execute("SELECT usuario_id, nombre, email, rol FROM usuarios WHERE usuario_id = ?", (user_id,))
-    usuario = cursor.fetchone()
-    return Usuario(id=usuario[0], nombre=usuario[1], email=usuario[2], rol=usuario[3]) if usuario else None
+
+    try:
+        cursor.execute("SELECT usuario_id, nombre, email, rol FROM usuarios WHERE usuario_id = ?", (user_id,))
+        usuario = cursor.fetchone()
+        return Usuario(id=usuario[0], nombre=usuario[1], email=usuario[2], rol=usuario[3]) if usuario else None
+
+    except Exception as e:
+        print(f"Error al cargar el usuario {user_id}: {e}")
+        return None
+
+    finally:
+        conn.close()
 
 
 # Ruta para login
@@ -74,13 +82,22 @@ def register():
         # Encriptar la contraseña
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
-        # Insertar el usuario en la base de datos
         conn, cursor = connect_db()
-        cursor.execute("INSERT INTO usuarios (nombre, email, password, rol) VALUES (?, ?, ?, ?)",
-                       (nombre, email, hashed_password, 'usuario'))  # Rol por defecto 'usuario'
-        conn.commit()
 
-        return redirect(url_for('login'))
+        try:
+            # Insertar el usuario en la base de datos
+            cursor.execute("INSERT INTO usuarios (nombre, email, password, rol) VALUES (?, ?, ?, ?)",
+                           (nombre, email, hashed_password, 'usuario'))  # Rol por defecto 'usuario'
+            conn.commit()
+
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            print(f"Error al registrar el usuario: {e}")
+            return "Ocurrió un error al registrar el usuario."
+
+        finally:
+            conn.close()
 
     return render_template('register.html')
 
@@ -92,21 +109,28 @@ def admin_dashboard():
         return redirect(url_for('index'))
 
     conn, cursor = connect_db()
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
-    total_usuarios = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM productos")
-    total_productos = cursor.fetchone()[0]
+    try:
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        total_usuarios = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM historial")
-    total_movimientos = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM productos")
+        total_productos = cursor.fetchone()[0]
 
-    conn.close()
+        cursor.execute("SELECT COUNT(*) FROM historial")
+        total_movimientos = cursor.fetchone()[0]
 
-    return render_template('admin_dashboard.html',
-                           total_usuarios=total_usuarios,
-                           total_productos=total_productos,
-                           total_movimientos=total_movimientos)
+        return render_template('admin_dashboard.html',
+                               total_usuarios=total_usuarios,
+                               total_productos=total_productos,
+                               total_movimientos=total_movimientos)
+
+    except Exception as e:
+        print(f"Error al obtener los datos del dashboard: {e}")
+        return "Ocurrió un error al cargar el panel de administración."
+
+    finally:
+        conn.close()
 
 
 # Ruta para el dashboard
@@ -121,6 +145,7 @@ def dashboard():
 def index():
     return render_template('index.html')
 
+
 @app.route('/agregar', methods=['GET', 'POST'])
 @login_required
 def agregar():
@@ -132,6 +157,7 @@ def agregar():
         agregar_producto(nombre, descripcion, cantidad, precio)
         return redirect('/listar')
     return render_template('agregar_producto.html')
+
 
 @app.route('/listar')
 @login_required
@@ -169,7 +195,7 @@ def confirmar_eliminar(id_producto):
     if request.method == 'POST':
         # Elimina el producto si el usuario confirma
         eliminar_producto(id_producto)
-        return redirect(url_for('index'))
+        return redirect(url_for('listar'))
 
     # Si es GET, muestra la página de confirmación
     producto = obtener_producto_por_id(id_producto)
@@ -190,67 +216,88 @@ def usuarios():
         return redirect(url_for('index'))  # Redirigir si no es admin
 
     conn, cursor = connect_db()
-    cursor.execute("SELECT * FROM usuarios")
-    users = cursor.fetchall()
-    conn.close()
 
-    return render_template('usuarios.html', usuarios=users)
+    try:
+        cursor.execute("SELECT * FROM usuarios")
+        users = cursor.fetchall()
+        return render_template('usuarios.html', usuarios=users)
+
+    except Exception as e:
+        print(f"Error al obtener la lista de usuarios: {e}")
+        return "Ocurrió un error al cargar la lista de usuarios."
+
+    finally:
+        conn.close()
 
 
-@app.route('/editar_usuario/<int:id>', methods=['GET', 'POST'])
+@app.route('/editar_usuario/<int:usuario_id>', methods=['GET', 'POST'])
 @login_required
-def editar_usuario(id):
+def editar_usuario(usuario_id):
     if current_user.rol != 'admin':
         return redirect(url_for('index'))  # Redirigir si no es admin
 
     conn, cursor = connect_db()
-    cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (id,))
-    usuario = cursor.fetchone()
 
-    if not usuario:
-        conn.close()
-        return redirect(url_for('usuarios'))
+    try:
+        cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (usuario_id,))
+        usuario = cursor.fetchone()
 
-    if request.method == 'POST':
-        nombre = request.form['nombre']
-        email = request.form['email']
-        rol = request.form['rol']
+        if not usuario:
+            return redirect(url_for('usuarios'))  # Redirigir si el usuario no existe
 
-        cursor.execute("""
-            UPDATE usuarios SET nombre = ?, email = ?, rol = ?
-            WHERE usuario_id = ?
-        """, (nombre, email, rol, id))
-        conn.commit()
-        conn.close()
+        if request.method == 'POST':
+            nombre = request.form['nombre']
+            email = request.form['email']
+            rol = request.form['rol']
 
-        return redirect(url_for('usuarios'))
+            cursor.execute("""
+                UPDATE usuarios SET nombre = ?, email = ?, rol = ?
+                WHERE usuario_id = ?
+            """, (nombre, email, rol, usuario_id))
+            conn.commit()
 
-    conn.close()
-    return render_template('editar_usuario.html', usuario=usuario)
+            return redirect(url_for('usuarios'))
+
+        return render_template('editar_usuario.html', usuario=usuario)
+
+    except Exception as e:
+        conn.rollback()  # Revertir cambios en caso de error
+        print(f"Error al editar el usuario {usuario_id}: {e}")  # Usa logging en producción
+        return "Ocurrió un error al editar el usuario."
+
+    finally:
+        conn.close()  # Asegurar que la conexión siempre se cierre
 
 
-@app.route('/eliminar_usuario/<int:id>', methods=['GET', 'POST'])
+@app.route('/eliminar_usuario/<int:usuario_id>', methods=['GET', 'POST'])
 @login_required
-def eliminar_usuario(id):
+def eliminar_usuario(usuario_id):
     if current_user.rol != 'admin':
         return redirect(url_for('index'))  # Redirigir si no es admin
 
     conn, cursor = connect_db()
-    cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (id,))
-    usuario = cursor.fetchone()
 
-    if not usuario:
+    try:
+        cursor.execute("SELECT * FROM usuarios WHERE usuario_id = ?", (usuario_id,))
+        usuario = cursor.fetchone()
+
+        if not usuario:
+            return redirect(url_for('usuarios'))  # Redirigir si el usuario no existe
+
+        if request.method == 'POST':
+            cursor.execute("DELETE FROM usuarios WHERE usuario_id = ?", (usuario_id,))
+            conn.commit()
+            return redirect(url_for('usuarios'))
+
+        return render_template('eliminar_usuario.html', usuario=usuario)
+
+    except Exception as e:
+        conn.rollback()  # Revertir cambios en caso de error
+        print(f"Error al eliminar el usuario {usuario_id}: {e}")
+        return "Ocurrió un error al eliminar el usuario."
+
+    finally:
         conn.close()
-        return redirect(url_for('usuarios'))
-
-    if request.method == 'POST':
-        cursor.execute("DELETE FROM usuarios WHERE usuario_id = ?", (id,))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('usuarios'))
-
-    conn.close()
-    return render_template('eliminar_usuario.html', usuario=usuario)
 
 
 @app.route('/productos')
@@ -289,20 +336,30 @@ def mostrar_carrito():
     carrito = session.get('carrito', {})
     productos_carrito = []
     total = 0
+
     if carrito:
         conn, cursor = connect_db()
-        for id_producto, cantidad in carrito.items():
-            cursor.execute("SELECT * FROM productos WHERE id = ?", (id_producto,))
-            producto = cursor.fetchone()
-            if producto:
-                total += producto[4] * cantidad  # producto[4] es el precio
-                productos_carrito.append({
-                    'nombre': producto[1],
-                    'cantidad': cantidad,
-                    'precio': producto[4],
-                    'total': producto[4] * cantidad
-                })
-        conn.close()
+
+        try:
+            for id_producto, cantidad in carrito.items():
+                cursor.execute("SELECT * FROM productos WHERE id = ?", (id_producto,))
+                producto = cursor.fetchone()
+                if producto:
+                    total_producto = producto[4] * cantidad
+                    total += total_producto
+                    productos_carrito.append({
+                        'nombre': producto[1],
+                        'cantidad': cantidad,
+                        'precio': producto[4],
+                        'total': total_producto
+                    })
+
+        except Exception as e:
+            print(f"Error al obtener los productos del carrito: {e}")
+            return "Ocurrió un error al cargar el carrito."
+
+        finally:
+            conn.close()
 
     return render_template('carrito.html', productos=productos_carrito, total=total)
 
@@ -363,32 +420,50 @@ def crear_orden():
 @login_required
 def mostrar_orden(orden_id):
     conn, cursor = connect_db()
-    cursor.execute("""
-        SELECT o.orden_id, o.fecha, o.estado, p.nombre, do.cantidad, do.precio_unitario
-        FROM ordenes o
-        JOIN detalles_orden do ON o.orden_id = do.orden_id
-        JOIN productos p ON do.producto_id = p.id
-        WHERE o.orden_id = ?
-    """, (orden_id,))
-    detalles = cursor.fetchall()
-    conn.close()
 
-    return render_template('orden.html', detalles=detalles)
+    try:
+        cursor.execute("""
+            SELECT o.orden_id, o.fecha, o.estado, p.nombre, do.cantidad, do.precio_unitario
+            FROM ordenes o
+            JOIN detalles_orden do ON o.orden_id = do.orden_id
+            JOIN productos p ON do.producto_id = p.id
+            WHERE o.orden_id = ?
+        """, (orden_id,))
+        detalles = cursor.fetchall()
+
+        if not detalles:
+            return "La orden no existe o no tiene productos."
+
+        return render_template('orden.html', detalles=detalles)
+
+    except Exception as e:
+        print(f"Error al obtener los detalles de la orden {orden_id}: {e}")
+        return "Ocurrió un error al cargar la orden."
+
+    finally:
+        conn.close()
 
 
 @app.route('/ordenes')
 @login_required
 def listar_ordenes():
     conn, cursor = connect_db()
-    cursor.execute("""
-        SELECT o.orden_id, o.fecha, o.total, o.estado, u.nombre
-        FROM ordenes o
-        JOIN usuarios u ON o.usuario_id = u.usuario_id
-    """)
-    ordenes = cursor.fetchall()
-    conn.close()
 
-    return render_template('listar_ordenes.html', ordenes=ordenes)
+    try:
+        cursor.execute("""
+            SELECT o.orden_id, o.fecha, o.total, o.estado, u.nombre
+            FROM ordenes o
+            JOIN usuarios u ON o.usuario_id = u.usuario_id
+        """)
+        ordenes = cursor.fetchall()
+        return render_template('listar_ordenes.html', ordenes=ordenes)
+
+    except Exception as e:
+        print(f"Error al listar las órdenes: {e}")
+        return "Ocurrió un error al cargar las órdenes."
+
+    finally:
+        conn.close()
 
 
 @app.route('/editar_orden/<int:orden_id>', methods=['GET', 'POST'])
@@ -527,30 +602,37 @@ def editar_detalles_orden(orden_id):
     return render_template('editar_detalles_orden.html', orden=orden, detalles=detalles, productos_disponibles=productos_disponibles)
 
 
-@app.route('/eliminar_orden/<int:orden_id>',methods=['GET', 'POST'])
+@app.route('/eliminar_orden/<int:orden_id>', methods=['GET', 'POST'])
 @login_required
 def eliminar_orden(orden_id):
     if current_user.rol != 'admin':
-        return redirect(url_for('index'))  # Solo admin puede editar órdenes
+        return redirect(url_for('index'))
 
     conn, cursor = connect_db()
 
-    # Obtener la orden y sus detalles
-    cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
-    orden = cursor.fetchone()
+    try:
+        # Obtener la orden y sus detalles
+        cursor.execute("SELECT * FROM ordenes WHERE orden_id = ?", (orden_id,))
+        orden = cursor.fetchone()
 
-    if not orden:
+        if not orden:
+            return redirect(url_for('listar_ordenes'))
+
+        if request.method == 'POST':
+            cursor.execute("DELETE FROM ordenes WHERE orden_id = ?", (orden_id,))
+            conn.commit()
+            return redirect(url_for('listar_ordenes'))
+
+        return render_template('eliminar_orden.html', orden=orden)
+
+    except Exception as e:
+        conn.rollback()  # Revertir cambios en caso de error
+        print(f"Error al eliminar la orden {orden_id}: {e}")
+        return "Ocurrió un error al eliminar la orden."
+
+    finally:
         conn.close()
-        return redirect(url_for('listar_ordenes'))  # Redirige si la orden no existe
 
-    if request.method == 'POST':
-        cursor.execute("DELETE FROM ordenes WHERE orden_id = ?", (orden_id,))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('listar_ordenes'))
-
-    conn.close()
-    return render_template('eliminar_orden.html', orden=orden)
 
 
 @app.route('/historial_orden/<int:orden_id>')
@@ -570,11 +652,11 @@ def historial_orden(orden_id):
         return render_template('historial_orden.html', historial=historial, orden_id=orden_id)
 
     except Exception as e:
-        print(f"Error al obtener el historial de la orden {orden_id}: {e}")  # Puedes usar logging en producción
+        print(f"Error al obtener el historial de la orden {orden_id}: {e}")
         return "Ocurrió un error al cargar el historial."
 
     finally:
-        conn.close()  # Asegura que la conexión siempre se cierre
+        conn.close()
 
 
 

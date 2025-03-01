@@ -8,7 +8,7 @@
         <p>Esta acción no se puede deshacer.</p>
     </div>
 
-    <form method="POST" action="{{ url_for('eliminar_usuario', id=usuario[0]) }}">
+    <form method="POST" action="{{ url_for('eliminar_usuario', usuario_id=usuario[0]) }}">
         <button type="submit" class="btn btn-danger">Sí, eliminar</button>
         <a href="/usuarios" class="btn btn-secondary">Cancelar</a>
     </form>
